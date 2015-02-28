@@ -9,6 +9,7 @@ import java.text.DateFormat
 import java.util.TimeZone
 import java.io.OutputStream
 import java.io.InputStream
+import java.nio.ByteBuffer
 
 /**
  * @author Sergey Mashkov
@@ -22,6 +23,7 @@ private data class RequestData<T> {
 
     var maxAttempts : Int? = null
 
+    var urlencoded = false
     var outputClosurePresent = false
     var outputClosure : (OutputStream) -> Unit = {}
     var resultClosure : (InputStream) -> T = {null as T}
@@ -67,6 +69,7 @@ public open class RequestBuilder<T>(public val current : RequestData<T> = Reques
     fun urlEncoded() : RequestBuilderWithStream<T> {
         val s = RequestBuilderWithStream(current)
         s.current.outputClosurePresent = true
+        s.current.urlencoded = true
         return s
     }
 
@@ -93,11 +96,51 @@ public open class RequestBuilder<T>(public val current : RequestData<T> = Reques
     }
 }
 
+// TODO: urlencoded filter
+
 public class RequestBuilderWithStream<T>(current : RequestData<T>) : RequestBuilder<T>(current) {
     fun withRequestStream(block : (OutputStream) -> Unit) = with {
         outputClosure = block
         outputClosurePresent = true
     }
+
+    fun withRequestTextBody(charset : String = "UTF-8", block : () -> String) : RequestBuilderWithStream<T> {
+        current.outputClosurePresent = true
+        current.outputClosure = { os ->
+            os.write(block().toByteArray(charset))
+            os.close()
+        }
+        return this
+    }
+
+    fun withRequestBinaryBody(block : () -> ByteArray) : RequestBuilderWithStream<T> {
+        current.outputClosurePresent = true
+        current.outputClosure = { os ->
+            os.write(block())
+            os.close()
+        }
+        return this
+    }
+
+    fun withRequestNioBinaryBody(block : () -> ByteBuffer) : RequestBuilderWithStream<T> {
+        current.outputClosurePresent = true
+        current.outputClosure = { os ->
+            val bb = block()
+
+            if (bb.hasArray()) {
+                os.write(bb.array(), bb.arrayOffset(), bb.remaining())
+                bb.position(bb.position() + bb.remaining())
+            } else {
+                val temp = ByteArray(bb.remaining())
+                bb.get(temp)
+                os.write(temp)
+            }
+
+            os.close()
+        }
+        return this
+    }
+
 }
 
 public class RequestBuilderMultipart<T>(current : RequestData<T>) : RequestBuilder<T>(current) {
