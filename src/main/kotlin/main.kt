@@ -14,53 +14,77 @@ import java.util.concurrent.Future
 import java.util.concurrent.FutureTask
 import cg.http.util.*
 import java.util.regex.Pattern
+import java.util.concurrent.Executors
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.ArrayBlockingQueue
+import java.nio.charset.Charset
 
 /**
  * @author Sergey Mashkov
  */
 
 public val http : HttpFactory = HttpFactory()
+private val exec = ThreadPoolExecutor(0, 32, 10, TimeUnit.SECONDS, ArrayBlockingQueue(1024))
 
 class HttpFactory {
     fun get() : RequestBuilder<Unit> = RequestBuilder(RequestData())
     fun post() : RequestBuilder<Unit> = RequestBuilder(RequestData("POST"))
 }
 
-fun <T> runRequest(attempt : Attempt) : Future<T> {
+fun <T> runRequest(attempt : Attempt<T>) : Future<T> {
     val limit = attempt.request.maxAttempts
 
     if (limit != null && attempt.attempt >= limit) {
         throw IllegalStateException("Attempts exceeded") // TODO
     }
 
-    return failedFuture(UnsupportedOperationException("Not yet implemented"))
+    return exec.submit<T> {
+        handleMe(attempt)
+    }
 }
 
-private class Attempt(val request : RequestData<*>, val attempt : Int = 0)
+class Attempt<T>(val request : RequestData<T>, val attempt : Int = 0)
 
-private data class RequestData<T>(method : String = "GET") {
+data class RequestData<T>(method : String = "GET") {
     val requestHeaders = HashMap<String, String>()
     val parameters = HashMap<String, String>()
 
     var maxAttempts : Int? = null
 
-    var urlencoded = false
+    var outputClosureSet = false
     var outputClosure : (OutputStream) -> Unit = { os -> os.close()}
-    var resultClosure : (InputStream) -> T = {null as T}
+        set(newOC) {
+            $outputClosure = newOC
+            outputClosureSet = true
+        }
     var errorClosure : (errors : List<Throwable>) -> Unit = {}
 
     var method = method
     var host : String by Delegates.notNull()
     var port : Int by Delegates.notNull()
     var path : String = "/"
+    var urlencoded = false
     var multiPart = false
+    var https = false
+    var ignoreSSLCertErrors = false
 
-    var onSuccessClosure : (InputStream) -> T = { s -> s.close(); null}
+    var onSuccessClosure : (ResponseInfo, InputStream) -> T = { r, s -> s.close(); null}
+}
+
+fun <T> RequestData<T>.with(block : RequestData<T>.() -> Unit) : RequestData<T> {
+    this.block()
+    return this
 }
 
 private val hostPortPattern = Pattern.compile("^([a-zA-Z0-9_-]+(\\.[a-zA-Z0-9_-]+)*):([0-9]+)$")!!
 public open class RequestBuilder<T>(public val current : RequestData<T> = RequestData()) {
     private val sdf by Delegates.lazy { httpDateFormat() }
+
+    fun withSSL(ignoreSSLErrors: Boolean) = with {
+        https = true
+        ignoreSSLCertErrors = ignoreSSLErrors
+    }
 
     fun withPath(path : String) : RequestBuilder<T> = with {
         this.path = path
@@ -96,8 +120,17 @@ public open class RequestBuilder<T>(public val current : RequestData<T> = Reques
     }
 
     fun withHeader(headerName : String, headerValue : Number) = withHeader(headerName, headerValue.toString())
+    fun withHeader(headerName : String, headerValue : CharSequence) = withHeader(headerName, headerValue.toString())
     fun withHeader(headerName : String, headerValue : Boolean) = withHeader(headerName, headerValue.toString())
     fun withHeader(headerName : String, headerValue : Date) = withHeader(headerName, sdf.format(headerValue))
+
+    fun withParam(param : String, value : String) = with {
+        parameters[param] = value
+    }
+
+    fun withParam(param : String, value : Number) = withParam(param, value.toString())
+    fun withParam(param : String, value : Boolean) = withParam(param, value.toString())
+    fun withParam(param : String, value : CharSequence) = withParam(param, value.toString())
 
     fun withRetries(retries : Int) = with {
         require(retries > 0) {"retries count should be positive"}
@@ -144,7 +177,7 @@ public open class RequestBuilder<T>(public val current : RequestData<T> = Reques
     }
 
     [suppress("UNCHECKED_CAST")]
-    fun <V> onSuccess(block : (InputStream) -> V) : RequestBuilder<V> {
+    fun <V> onSuccess(block : (ResponseInfo, InputStream) -> V) : RequestBuilder<V> {
         val next = current : RequestData<*> as RequestData<V>
 
         next.onSuccessClosure = block

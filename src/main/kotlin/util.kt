@@ -9,6 +9,11 @@ import java.text.DateFormat
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
+import java.util.regex.Pattern
+import java.util.regex.Matcher
+import java.util.ArrayList
+import java.util.regex.MatchResult
+import java.nio.charset.Charset
 
 /**
  * Created by CG on 28.02.2015.
@@ -40,3 +45,15 @@ fun httpDateFormat() : DateFormat {
     sdf.setTimeZone(TimeZone.getTimeZone("GMT"))
     return sdf
 }
+
+fun String.matcher(p : Pattern) = p.matcher(this)
+fun Matcher.findAll() : List<MatchResult> {
+    val result = ArrayList<MatchResult>()
+    while (find()) {
+        result.add(toMatchResult())
+    }
+    return result
+}
+
+fun String.toCharset() = Charset.forName(this)
+fun String.unquote() = if ((startsWith("\"") && endsWith("\"") || (startsWith("'") && endsWith("'")))) substring(1, length() - 1) else this
