@@ -62,30 +62,30 @@ public fun <T> handleRequestAttempt(attempt : Attempt<T>, httpConnectionFactory 
         connection.setAllowUserInteraction(false)
         connection.setRequestMethod(attempt.request.method)
         connection.setInstanceFollowRedirects(true)
-        connection.setDoOutput(true)
+        connection.setDoOutput(attempt.request.outputClosureSet)
         connection.setDoInput(true)
         connection.addRequestProperty("Connection", "close")
+        connection.addRequestProperty("User-Agent", "kotlinx.http")
+        connection.setUseCaches(false)
+        connection.setConnectTimeout(15000)
 
         attempt.request.requestHeaders.forEach { k, v ->
             connection.addRequestProperty(k, v)
         }
+
+        connection.connect()
 
         if (attempt.request.outputClosureSet) {
             attempt.request.outputClosure(connection.getOutputStream())
         }
 
         val headers = connection.getHeaderFields()
-//        headers.forEach { e ->
-//            e.getValue().forEach {
-//                println("${e.getKey()}: $it")
-//            }
-//        }
-
         val ri = ResponseInfo(code = connection.getResponseCode(), message = connection.getResponseMessage(),
                 contentCharset = getContentCharset(headers)?.toCharset(),
                 headers = headers,
                 contentType = getContentType(headers)
                 )
+
         return attempt.request.onSuccessClosure(ri, connection.getInputStream())
     } catch (e : Throwable) {
         println("Failed: ${connection.getResponseCode()} ${connection.getResponseMessage()}")

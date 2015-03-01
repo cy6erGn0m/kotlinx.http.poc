@@ -22,21 +22,26 @@ import java.util.TimeZone
 class MainTest {
     ignore
     test fun main() {
-        val request = http.get() withHost "google.ru:80" withPath "/" withRetries 3 onSuccess { i, s ->
-            s.buffered().reader(i.contentCharset ?: Charsets.UTF_8).use { reader ->
-                reader.readText()
-            }
-        } onError { errors ->
-            errors.forEach {
-                println("Bad: $it")
-            }
-        }
+//        val request = http.get() withHost "google.ru:80" withPath "/" withRetries 3 onSuccess { i, s ->
+//            s.buffered().reader(i.contentCharset ?: Charsets.UTF_8).use { reader ->
+//                reader.readText()
+//            }
+//        } onError { errors ->
+//            errors.forEach {
+//                println("Bad: $it")
+//            }
+//        }
+//
+//        val f = request.withParam("q", "where is").send()
+//        val text = f.get()
+//        println(text)
+//        println()
+//        println("Size is ${text.length()}")
 
-        val f = request.withParam("q", "where is").send()
-        val text = f.get()
-        println(text)
-        println()
-        println("Size is ${text.length()}")
+        val head = http.head() withHost "google.ru:80" withPath "/"
+        val headInfo = head.send().get()
+
+        println(headInfo)
     }
 
     test fun testContentCharset() {

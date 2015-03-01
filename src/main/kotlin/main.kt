@@ -28,8 +28,12 @@ public val http : HttpFactory = HttpFactory()
 private val exec = ThreadPoolExecutor(0, 32, 10, TimeUnit.SECONDS, ArrayBlockingQueue(1024))
 
 class HttpFactory {
-    fun get() : RequestBuilder<Unit> = RequestBuilder(RequestData())
-    fun post() : RequestBuilder<Unit> = RequestBuilder(RequestData("POST"))
+    fun get() : RequestBuilder<ResponseInfo> = RequestBuilder(RequestData())
+    fun post() : RequestBuilder<ResponseInfo> = RequestBuilder(RequestData("POST"))
+    fun head() : RequestBuilder<ResponseInfo> = RequestBuilder(RequestData("HEAD"))
+    fun put() : RequestBuilder<ResponseInfo> = RequestBuilder(RequestData("PUT"))
+    fun delete() : RequestBuilder<ResponseInfo> = RequestBuilder(RequestData("DELETE"))
+    fun method(method : String) : RequestBuilder<ResponseInfo> = RequestBuilder(RequestData(method))
 }
 
 fun <T> runRequest(attempt : Attempt<T>) : Future<T> {
@@ -69,7 +73,7 @@ data class RequestData<T>(method : String = "GET") {
     var https = false
     var ignoreSSLCertErrors = false
 
-    var onSuccessClosure : (ResponseInfo, InputStream) -> T = { r, s -> s.close(); null}
+    var onSuccessClosure : (ResponseInfo, InputStream) -> T = [suppress("UNCHECKED_CAST")]{ r, s -> s.close(); r as T}
 }
 
 private val hostPortPattern = Pattern.compile("^([a-zA-Z0-9_-]+(\\.[a-zA-Z0-9_-]+)*):([0-9]+)$")!!
