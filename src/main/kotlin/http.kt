@@ -75,11 +75,11 @@ public fun <T> handleRequestAttempt(attempt : Attempt<T>, httpConnectionFactory 
         }
 
         val headers = connection.getHeaderFields()
-        headers.forEach { e ->
-            e.getValue().forEach {
-                println("${e.getKey()}: $it")
-            }
-        }
+//        headers.forEach { e ->
+//            e.getValue().forEach {
+//                println("${e.getKey()}: $it")
+//            }
+//        }
 
         val ri = ResponseInfo(code = connection.getResponseCode(), message = connection.getResponseMessage(),
                 contentCharset = getContentCharset(headers)?.toCharset(),

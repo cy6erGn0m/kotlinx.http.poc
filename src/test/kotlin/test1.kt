@@ -10,6 +10,10 @@ import org.mockito.Mockito
 import java.io.ByteArrayInputStream
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.test.assertNotEquals
+import java.util.Date
+import java.text.SimpleDateFormat
+import org.mockito.InOrder
+import java.util.TimeZone
 
 /**
  * Created by CG on 28.02.2015.
@@ -169,6 +173,29 @@ class RequestAttemptHandlerTest {
         }
 
         assertEquals("test content", result.toString("UTF-8"))
+    }
+
+    test fun testHeaders() {
+        val sdf = SimpleDateFormat("yyyyMMdd")
+        sdf.setTimeZone(TimeZone.getTimeZone("GMT"))
+
+        val request = http.get().withHost("test:8080").
+                withHeader("My-Header-1", "string").
+                withHeader("My-Header-2", 2).
+                withHeader("My-Header-3", true).
+                withHeader("My-Header-4", sdf.parse("2014-01-01"))
+
+
+        val connection = Mockito.mock(javaClass<HttpURLConnection>())
+        Mockito.`when`(connection.getInputStream()).thenReturn(ByteArrayInputStream("test content".toByteArray()))
+
+        val result = handleRequestAttempt(Attempt(request.current)) { url, proxy -> connection }
+
+        Mockito.verify(connection, Mockito.times(1)).addRequestProperty("Connection", "close")
+        Mockito.verify(connection, Mockito.times(1)).addRequestProperty("My-Header-1", "string")
+        Mockito.verify(connection, Mockito.times(1)).addRequestProperty("My-Header-2", "2")
+        Mockito.verify(connection, Mockito.times(1)).addRequestProperty("My-Header-3", "true")
+        Mockito.verify(connection, Mockito.times(1)).addRequestProperty("My-Header-4", "Sun, 01 Dec 2013 00:00:00 GMT")
     }
 }
 

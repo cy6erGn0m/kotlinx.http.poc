@@ -109,7 +109,7 @@ public open class RequestBuilder<T>(public val current : RequestData<T> = Reques
 
     fun withHeader(headerName : String, headerValue : String) = with {
         require(headerName.matches("[a-zA-Z0-9_\\-]+")) {"header name seems to be not valid: $headerName"}
-        require(headerValue.matches("[a-zA-Z0-9_+;#,. %\\-]+")) {"header value seems to be not valid: $headerValue"}
+        require(headerValue.matches("[a-zA-Z0-9_+;:#,. %\\-]+")) {"header value seems to be not valid: $headerValue"}
 
         requestHeaders[headerName] = headerValue
     }
