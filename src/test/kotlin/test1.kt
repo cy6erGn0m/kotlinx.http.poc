@@ -197,6 +197,29 @@ class RequestAttemptHandlerTest {
         Mockito.verify(connection, Mockito.times(1)).addRequestProperty("My-Header-3", "true")
         Mockito.verify(connection, Mockito.times(1)).addRequestProperty("My-Header-4", "Sun, 01 Dec 2013 00:00:00 GMT")
     }
+
+    test fun testReceiveResponseHeaders() {
+        val request = http.get().withHost("test:8080").
+                onSuccessText { (responseInfo, s) -> responseInfo }
+
+        val connection = Mockito.mock(javaClass<HttpURLConnection>())
+        Mockito.`when`(connection.getInputStream()).thenReturn(ByteArrayInputStream("test content".toByteArray("UTF-8")))
+        Mockito.`when`(connection.getHeaderFields()).thenReturn(mapOf(
+                "Content-Type" to listOf("text/plain;charset=utf-8"),
+                "My-Header" to listOf("my value")
+        ))
+        Mockito.`when`(connection.getResponseCode()).thenReturn(200)
+        Mockito.`when`(connection.getResponseMessage()).thenReturn("OK")
+
+        val result = handleRequestAttempt(Attempt(request.current)) { url, proxy -> connection }
+
+        Mockito.verify(connection).getHeaderFields()
+        assertEquals(Charsets.UTF_8, result.contentCharset)
+        assertEquals("text/plain", result.contentType)
+        assertEquals(listOf("my value"), result.headers["My-Header"])
+        assertEquals(200, result.code)
+        assertEquals("OK", result.message)
+    }
 }
 
 fun requestOf(params : Map<String, String> = emptyMap()) = RequestData<Unit>("GET").with {
