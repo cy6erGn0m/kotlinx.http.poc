@@ -40,7 +40,7 @@ fun <T> runRequest(attempt : Attempt<T>) : Future<T> {
     }
 
     return exec.submit<T> {
-        handleMe(attempt)
+        handleRequestAttempt(attempt)
     }
 }
 
@@ -70,11 +70,6 @@ data class RequestData<T>(method : String = "GET") {
     var ignoreSSLCertErrors = false
 
     var onSuccessClosure : (ResponseInfo, InputStream) -> T = { r, s -> s.close(); null}
-}
-
-fun <T> RequestData<T>.with(block : RequestData<T>.() -> Unit) : RequestData<T> {
-    this.block()
-    return this
 }
 
 private val hostPortPattern = Pattern.compile("^([a-zA-Z0-9_-]+(\\.[a-zA-Z0-9_-]+)*):([0-9]+)$")!!
@@ -183,6 +178,25 @@ public open class RequestBuilder<T>(public val current : RequestData<T> = Reques
         next.onSuccessClosure = block
         return this : RequestBuilder<*> as RequestBuilder<V>
     }
+
+    [suppress("UNCHECKED_CAST")]
+    fun <V> onSuccessText(block : (ResponseInfo, String) -> V) : RequestBuilder<V> {
+        val next = current : RequestData<*> as RequestData<V>
+
+        next.onSuccessClosure = { ri, s -> block(ri, s.buffered().reader(ri.contentCharset ?: Charsets.UTF_8).readText()) }
+        return this : RequestBuilder<*> as RequestBuilder<V>
+    }
+
+    [suppress("UNCHECKED_CAST")]
+    fun <V> onSuccessBytes(block : (ResponseInfo, ByteArray) -> V) : RequestBuilder<V> {
+        val next = current : RequestData<*> as RequestData<V>
+
+        next.onSuccessClosure = { ri, s -> block(ri, s.readBytes()) } // TODO use estimated size
+        return this : RequestBuilder<*> as RequestBuilder<V>
+    }
+
+    fun withTextResponse() : RequestBuilder<String> = onSuccessText { (responseInfo, s) -> s }
+    fun withBytesResponse() : RequestBuilder<ByteArray> = onSuccessBytes { (responseInfo, bytes) -> bytes }
 
     fun onError(block : (errors : List<Throwable>) -> Unit) : RequestBuilder<T> = with {
         errorClosure = block

@@ -10,6 +10,7 @@ import cg.http.util.toCharset
 import java.nio.charset.Charset
 import cg.http.util.unquote
 import javax.net.ssl.HttpsURLConnection
+import java.net.Proxy
 
 data class ResponseInfo(val code : Int, val message : String?, val headers : Map<String, List<String>>, val contentType : String?, val contentCharset : Charset?)
 
@@ -47,10 +48,12 @@ fun getContentType(headers : Map<String?, List<String>>) : String? =
                 flatMap {it.flatMap {it.matcher(contentTypePattern).findAll()}}.
                 map {it.group(1)}.filter { it != null && it.isNotEmpty() && !parameterPattern.matcher(it).find() }.lastOrNull()
 
-fun <T> handleMe(attempt : Attempt<T>) : T {
+fun defaultHttpConnectionFactory(url : URL, proxy : Proxy) : HttpURLConnection = url.openConnection(proxy) as HttpURLConnection
+
+public fun <T> handleRequestAttempt(attempt : Attempt<T>, httpConnectionFactory : (URL, Proxy) -> HttpURLConnection = ::defaultHttpConnectionFactory) : T {
     // TODO proxy
     // TODO think of chunk mode
-    val connection = URL(buildUrl(attempt.request)).openConnection() as HttpURLConnection
+    val connection = httpConnectionFactory(URL(buildUrl(attempt.request)), Proxy.NO_PROXY)
     try {
         if (connection is HttpsURLConnection && attempt.request.ignoreSSLCertErrors) {
 //            connection.setSSLSocketFactory()

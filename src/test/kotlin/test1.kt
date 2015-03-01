@@ -1,9 +1,15 @@
-package cg.http
+package cg.http.test
 
 import org.junit.Test as test
 import org.junit.Ignore as ignore
 import kotlin.test.assertEquals
 import kotlin.test.expect
+import java.net.HttpURLConnection
+import cg.http.*
+import org.mockito.Mockito
+import java.io.ByteArrayInputStream
+import java.util.concurrent.atomic.AtomicReference
+import kotlin.test.assertNotEquals
 
 /**
  * Created by CG on 28.02.2015.
@@ -74,8 +80,103 @@ class MainTest {
     test fun buildURLSSL() {
         assertEquals("https://test:8080/", buildUrl(requestOf().with {host = "test"; port = 8080; path = "/"; https = true}))
     }
+}
 
-    private fun requestOf(params : Map<String, String> = emptyMap()) = RequestData<Unit>("GET").with {
-        parameters.putAll(params)
+class RequestAttemptHandlerTest {
+    test fun testDummy() {
+        val request = requestOf().with {host = "test"; port = 80}
+        handleRequestAttempt(Attempt(request)) { url, proxy ->
+            val connection = Mockito.mock(javaClass<HttpURLConnection>())
+            Mockito.`when`(connection.getInputStream()).thenReturn(ByteArrayInputStream("test content".toByteArray()))
+            connection
+        }
     }
+
+    test fun testSimple() {
+        var result : String? = null
+        val request = requestOf().with {host = "test"; port = 80; onSuccessClosure = {ri, s -> result = s.reader(ri.contentCharset ?: Charsets.UTF_8).buffered().readText()}}
+        val result2 = handleRequestAttempt(Attempt(request)) { url, proxy ->
+            val connection = Mockito.mock(javaClass<HttpURLConnection>())
+            Mockito.`when`(connection.getInputStream()).thenReturn(ByteArrayInputStream("test content".toByteArray()))
+            connection
+        }
+
+        assertEquals("test content", result)
+        assertEquals(Unit, result2)
+    }
+
+    test fun testSimpleWithBuilder() {
+        var result : String? = null
+        val request = http.get().withHost("test:80").onSuccess { (ri, s) ->
+            result = s.reader(ri.contentCharset ?: Charsets.UTF_8).buffered().readText()
+            result
+        }
+
+        val result2 = handleRequestAttempt(Attempt(request.current)) { url, proxy ->
+            val connection = Mockito.mock(javaClass<HttpURLConnection>())
+            Mockito.`when`(connection.getInputStream()).thenReturn(ByteArrayInputStream("test content".toByteArray()))
+            connection
+        }
+
+        assertEquals("test content", result)
+        assertEquals("test content", result2)
+    }
+
+    test fun testSimpleWithBuilderLightText() {
+        val request = http.get().withHost("test:80").withTextResponse()
+
+        val result = handleRequestAttempt(Attempt(request.current)) { url, proxy ->
+            val connection = Mockito.mock(javaClass<HttpURLConnection>())
+            Mockito.`when`(connection.getInputStream()).thenReturn(ByteArrayInputStream("test content".toByteArray()))
+            connection
+        }
+
+        assertEquals("test content", result)
+    }
+
+    test fun testSimpleWithBuilderLightTextWithBadEncoding() {
+        val request = http.get().withHost("test:80").withTextResponse()
+
+        val result = handleRequestAttempt(Attempt(request.current)) { url, proxy ->
+            val connection = Mockito.mock(javaClass<HttpURLConnection>())
+            Mockito.`when`(connection.getInputStream()).thenReturn(ByteArrayInputStream("Тест".toByteArray("Windows-1251")))
+            connection
+        }
+
+        assertNotEquals("Тест", result)
+    }
+
+    test fun testSimpleWithBuilderLightTextWithGoodEncoding() {
+        val request = http.get().withHost("test:80").withTextResponse()
+
+        val result = handleRequestAttempt(Attempt(request.current)) { url, proxy ->
+            val connection = Mockito.mock(javaClass<HttpURLConnection>())
+            Mockito.`when`(connection.getInputStream()).thenReturn(ByteArrayInputStream("Тест".toByteArray("Windows-1251")))
+            Mockito.`when`(connection.getHeaderFields()).thenReturn(mapOf("Content-Type" to listOf("text/plain; charset=windows-1251")))
+            connection
+        }
+
+        assertEquals("Тест", result)
+    }
+
+    test fun testSimpleWithBuilderLightBytes() {
+        val request = http.get().withHost("test:80").withBytesResponse()
+
+        val result = handleRequestAttempt(Attempt(request.current)) { url, proxy ->
+            val connection = Mockito.mock(javaClass<HttpURLConnection>())
+            Mockito.`when`(connection.getInputStream()).thenReturn(ByteArrayInputStream("test content".toByteArray()))
+            connection
+        }
+
+        assertEquals("test content", result.toString("UTF-8"))
+    }
+}
+
+fun requestOf(params : Map<String, String> = emptyMap()) = RequestData<Unit>("GET").with {
+    parameters.putAll(params)
+}
+
+inline fun <T> RequestData<T>.with(block : RequestData<T>.() -> Unit) : RequestData<T> {
+    this.block()
+    return this
 }
