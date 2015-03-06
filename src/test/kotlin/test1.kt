@@ -3,17 +3,19 @@ package cg.http.test
 import org.junit.Test as test
 import org.junit.Ignore as ignore
 import kotlin.test.assertEquals
-import kotlin.test.expect
 import java.net.HttpURLConnection
 import cg.http.*
 import org.mockito.Mockito
 import java.io.ByteArrayInputStream
-import java.util.concurrent.atomic.AtomicReference
 import kotlin.test.assertNotEquals
-import java.util.Date
 import java.text.SimpleDateFormat
-import org.mockito.InOrder
 import java.util.TimeZone
+import java.net.ServerSocket
+import kotlin.concurrent.thread
+import java.util.concurrent.CountDownLatch
+import kotlin.test.assertNotNull
+import java.util.concurrent.atomic.AtomicReference
+import kotlinx.http.test.runHttpTest
 
 /**
  * Created by CG on 28.02.2015.
@@ -38,10 +40,32 @@ class MainTest {
 //        println()
 //        println("Size is ${text.length()}")
 
-        val head = http.head() withHost "google.ru:80" withPath "/"
+        val head = http.head() withHost "localhost:9090" withPath "/"
         val headInfo = head.send().get()
 
         println(headInfo)
+    }
+
+    test fun testHttp() {
+        runHttpTest({ port ->
+            val response = http.get().withHost("localhost", port).send().get()
+
+            assertEquals(200, response.code)
+            assertEquals("OK", response.message)
+            assertEquals(listOf("StupidTestServer"), response.headers["Server"])
+        }, { (reader, m, p, headers, writer) ->
+            println(m)
+            assertEquals("GET", m)
+
+            writer.write("HTTP/1.1 200 OK\n")
+            writer.write("Connection: close\n")
+            writer.write("Content-Type: text/plain\n")
+            writer.write("Server: StupidTestServer\n")
+            writer.write("Content-Length: 0\n")
+            writer.write("\n")
+            writer.flush()
+
+        })
     }
 
     test fun testContentCharset() {
